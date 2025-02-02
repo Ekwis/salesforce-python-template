@@ -1,308 +1,213 @@
 # Salesforce Python Template
 
-A Python template for interacting with Salesforce, featuring bulk data operations, SOQL queries, CSV processing, and interactive field mapping.
+A robust Python template designed for seamless interaction with Salesforce. This project enables bulk data operations, SOQL queries, CSV processing, interactive field mapping, and data enrichment via web scraping.
 
 ## Features
 
-- Salesforce authentication using environment variables
-- Bulk data upload from CSV files (with optional field mapping)
-- SOQL query execution and CSV export
-- Data manipulation script for custom transformations
-- Error handling and logging
-- Configurable settings via YAML
-- Unit tests with pytest
+- **Salesforce Authentication:** Utilises environment variables for secure access.
+- **Bulk Data Operations:** Supports insert, update, delete, and upsert operations.
+- **SOQL Query Execution:** Run queries against Salesforce and export results to CSV.
+- **Interactive Field Mapping:** Map CSV columns to Salesforce fields during upload.
+- **Data Enrichment:** Enhances Salesforce records by scraping additional company information.
+- **Customisable Configuration:** Easily adjust settings via a YAML configuration file.
+- **Comprehensive Logging and Error Handling**
+- **Unit and Integration Tests:** Ensuring high code quality with pytest.
 
-## Directory Structure
+## Project Setup
 
-```
-Salesforce-Python-Template/
-├── config/               # Configuration files
-│   └── config.yaml
-├── errors/              # Error logs and failed CSVs
-├── input/               # Input CSV files
-├── output/              # Output CSV files (queried or manipulated)
-├── scripts/             # One-off scripts for uploading/querying/manipulating
-│   ├── manipulate_data.py
-│   ├── query_data.py
-│   └── upload_data.py
-├── src/                 # Shared modules
-│   ├── __init__.py
-│   ├── salesforce.py
-│   └── utils.py
-├── tests/               # Unit tests and integration tests
-├── .env                 # Environment variables
-├── .env.example
-├── README.md            # This file
-└── requirements.txt     # Python dependencies
-```
+Follow these steps to set up the project:
 
-## Prerequisites
-
-- Python 3.9+
-- A Salesforce account with API access
-- Salesforce security token
-- Git
-- Homebrew (for macOS users)
-
-## Detailed Setup Guide
-
-### 1. System Setup (macOS)
-
-1. Install Homebrew if not already installed:
-   ```bash
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-   ```
-
-2. Install Python 3.9+ using Homebrew:
-   ```bash
-   brew install python@3.9
-   ```
-
-3. Install Git if not already installed:
-   ```bash
-   brew install git
-   ```
-
-### 2. Salesforce Setup
-
-1. Enable API Access in Salesforce:
-   - Log in to Salesforce
-   - Go to Setup → Users → Profiles
-   - Select your profile
-   - Ensure "API Enabled" permission is checked
-
-2. Generate a Security Token:
-   - Go to Settings → My Personal Information → Reset Security Token
-   - Click "Reset Security Token"
-   - Check your email for the new token
-
-3. Note down the following information:
-   - Your Salesforce username
-   - Your Salesforce password
-   - Your security token (from step 2)
-   - Your Salesforce domain (e.g., login.salesforce.com for production)
-
-### 3. Project Setup
-
-1. Clone the repository:
+1. **Clone the Repository**
    ```bash
    git clone <repository-url>
    cd Salesforce-Python-Template
-   ```
 
-2. Create and activate a virtual environment:
-   ```bash
-   # Create a new virtual environment
-   python3 -m venv venv
-   
-   # Activate the virtual environment
-   source venv/bin/activate
-   
-   # Verify Python version
-   python --version  # Should show Python 3.9+
-   ```
+    2.	Create and Activate a Virtual Environment
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Set up environment variables:
-   ```bash
-   # Copy the example environment file
-   cp .env.example .env
-   
-   # Open .env in your preferred editor
-   open -e .env  # For macOS
-   ```
-
-5. Update the .env file with your Salesforce credentials:
-   ```plaintext
-   SALESFORCE_USERNAME=your_username
-   SALESFORCE_PASSWORD=your_password
-   SALESFORCE_SECURITY_TOKEN=your_token
-   SALESFORCE_DOMAIN=login  # Use 'test' for sandbox
-   ```
-
-### 4. Configuration
-
-1. Review and update config/config.yaml as needed:
-   ```yaml
-   api:
-     version: '57.0'
-     batch_size: 200
-     timeout: 30
-   logging:
-     level: INFO
-     format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-     file: 'errors/app.log'
-   csv:
-     encoding: 'utf-8'
-     delimiter: ','
-     error_directory: 'errors'
-     input_directory: 'input'
-   ```
-
-2. Create necessary directories:
-   ```bash
-   mkdir -p input output errors
-   ```
-
-## Usage
-
-### 1. Upload Data to Salesforce
-
-This script allows you to upload CSV data to Salesforce with interactive field mapping.
-
-```bash
-# Activate virtual environment if not already activated
+python3 -m venv venv
 source venv/bin/activate
 
-# Run upload script
-python scripts/upload_data.py path/to/input.csv ObjectName
-```
+Confirm that your Python version is 3.9 or higher:
 
-During the upload process, you'll be prompted for field mapping:
-- For each CSV column, you'll see: `Map this field to Salesforce? (y to map, n to skip)`
-- If yes, enter the corresponding Salesforce field name (or press Enter to keep the original)
-- If no, the field will be skipped
+python --version
 
-### 2. Data Upload Operations
 
-The Salesforce Python Template now supports the following data upload operations:
+    3.	Install Dependencies
+Install all required Python packages using:
 
-- **Insert**: Insert new records. You can upload a single record or multiple records in a batch (up to 200 records per API call).
-- **Update**: Update existing records by providing the record ID. You can update one or many records in a single batch.
-- **Upsert**: Insert or update records based on an external ID field. When using upsert, specify the external ID field (e.g., `External_Id__c`).
-- **Delete**: Delete records by providing their record ID. Supports single or batch deletion.
+pip install -r requirements.txt
 
-#### Examples:
 
-**Insert Single Record**
-```bash
-python scripts/upload_data.py input/single_record.csv Account --operation insert
-```
+    4.	Set Up Environment Variables
+Create a copy of the environment file and update it with your Salesforce credentials:
 
-**Insert Multiple Records (Batch)**
-```bash
-python scripts/upload_data.py input/multiple_records.csv Account --operation insert --batch_size 10
-```
+cp .env.example .env
 
-**Update Single Record**
-```bash
-python scripts/upload_data.py input/update_single_record.csv Account --operation update
-```
+Open the .env file in your preferred editor and configure the following variables:
 
-**Update Multiple Records (Batch)**
-```bash
-python scripts/upload_data.py input/update_multiple_records.csv Account --operation update --batch_size 10
-```
+SALESFORCE_USERNAME=your_username
+SALESFORCE_PASSWORD=your_password
+SALESFORCE_SECURITY_TOKEN=your_token
+SALESFORCE_DOMAIN=login  # Use 'test' for sandbox environments
 
-**Upsert Single Record**
-```bash
-python scripts/upload_data.py input/upsert_single_record.csv Account --operation upsert --external_id_field External_Id__c
-```
 
-**Upsert Multiple Records (Batch)**
-```bash
-python scripts/upload_data.py input/upsert_multiple_records.csv Account --operation upsert --external_id_field External_Id__c --batch_size 10
-```
 
-**Delete Single Record**
-```bash
-python scripts/upload_data.py input/delete_single_record.csv Account --operation delete
-```
+Configuration
 
-**Delete Multiple Records (Batch)**
-```bash
-python scripts/upload_data.py input/delete_multiple_records.csv Account --operation delete --batch_size 10
-```
+Review and modify the configuration file located at config/config.yaml to suit your requirements. Key configuration areas include:
+    •	Salesforce API Settings: API version, batch size, and timeout.
+    •	Logging: Log level, format, and file destination.
+    •	CSV Processing: Encoding, delimiter, and directories for input and error files.
+    •	Data Enrichment Fields: Specify which fields to update for different Salesforce objects (Account, Contact, Lead).
 
-All operations support batch processing with the `--batch_size` parameter (max 200 records per API call).
+Example snippet from config/config.yaml:
 
-## Testing
+api:
+  version: '57.0'
+  batch_size: 200
+  timeout: 30
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file: 'errors/app.log'
+csv:
+  encoding: 'utf-8'
+  delimiter: ','
+  error_directory: 'errors'
+  input_directory: 'input'
+enrichment:
+  fields:
+    Account:
+      - Phone
+      - Website
+      - BillingStreet
+      - BillingCity
+      - BillingState
+      - BillingPostalCode
+      - BillingCountry
+    Contact:
+      - Phone
+      - Email
+      - MailingStreet
+      - MailingCity
+      - MailingState
+      - MailingPostalCode
+      - MailingCountry
+    Lead:
+      - Phone
+      - Email
+      - Street
+      - City
+      - State
+      - PostalCode
+      - Country
 
-1. Run the full test suite:
-   ```bash
-   pytest tests/
-   ```
+Usage
 
-2. Run specific test files:
-   ```bash
-   pytest tests/test_salesforce.py
-   pytest tests/test_upload_operations.py
-   ```
+Below are detailed instructions for each script included in the project.
 
-3. Run tests with coverage:
-   ```bash
-   pytest --cov=src tests/
-   ```
+1. Upload Data Script (scripts/upload_data.py)
 
-## Troubleshooting
+This script uploads CSV data to Salesforce with interactive field mapping. It supports the following operations:
+    •	insert
+    •	update
+    •	delete
+    •	upsert
 
-### Common Issues
+How It Works:
+    •	Field Mapping: The script will prompt you to map CSV headers to corresponding Salesforce fields. You can choose to skip any fields.
+    •	Batch Processing: Records are processed in batches (up to 200 records per call) as defined in the configuration.
+    •	Operations: For upsert operations, ensure you specify the external ID field using the --external_id_field option.
 
-1. **Authentication Failures**
-   - Verify credentials in the .env file.
-   - Ensure the security token is current.
-   - Check if your IP is whitelisted in Salesforce.
+Command-Line Options:
+    •	csv_file: Path to the CSV file to be uploaded.
+    •	object_name: Salesforce object name (e.g., Account, Contact).
+    •	–operation: Choose the operation (insert, update, delete, upsert). Default is insert.
+    •	–config: (Optional) Path to the configuration file. Default is config/config.yaml.
+    •	–external_id_field: (Required for upsert) The external ID field to use.
+    •	–batch_size: (Optional) Number of records per API call.
 
-2. **API Errors**
-   - Verify API access is enabled.
-   - Check the API version in config.yaml.
-   - Ensure object permissions are correct.
+Example Usage:
 
-3. **Virtual Environment Issues**
-   ```bash
-   # Recreate virtual environment
-   deactivate  # If already in a venv
-   rm -rf venv
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
+source venv/bin/activate
+python scripts/upload_data.py path/to/input.csv Account --operation insert
 
-### Logging
+Follow the interactive prompts to map CSV fields to Salesforce fields.
 
-- Check errors/app.log for detailed error messages.
-- Failed records during upload are saved in errors/.
-- Each error file includes a timestamp for tracking.
+2. Query Data Script (scripts/query_data.py)
 
-## Development
+This script executes a SOQL query against Salesforce and exports the results to a CSV file.
 
-### Setting Up Development Environment
+How It Works:
+    •	SOQL Query Execution: Provide a valid SOQL query to retrieve data from Salesforce.
+    •	CSV Export: The retrieved records are saved to a CSV file at the specified output path.
+    •	Logging: The script logs the query execution progress and any errors encountered.
 
-1. Set up pre-commit hooks:
-   ```bash
-   pre-commit install
-   ```
+Command-Line Options:
+    •	soql: The SOQL query to execute (enclose the query in quotes).
+    •	output_file: The file path where the CSV output will be saved.
+    •	–config: (Optional) Path to the configuration file. Default is config/config.yaml.
 
-### Contributing
+Example Usage:
 
-1. Fork the repository.
-2. Create a feature branch:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-3. Commit your changes:
-   ```bash
-   git commit -am 'Add some feature'
-   ```
-4. Push to the branch:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-5. Create a Pull Request.
+source venv/bin/activate
+python scripts/query_data.py "SELECT Id, Name FROM Account" output/accounts.csv
 
-## License
+The script will log the number of records retrieved and confirm the CSV export location.
 
-This project is licensed under the MIT License – see the LICENSE file for details.
+3. Data Enrichment Script (scripts/manipulate_data.py)
 
-## Support
+This script enriches a Salesforce record by:
+    •	Querying the record by ID and object type.
+    •	Performing web scraping to collect additional company information (e.g., phone, email, address, website).
+    •	Preparing and optionally updating the record in Salesforce after user confirmation.
 
-For support and questions:
-1. Check existing issues in the repository.
-2. Create a new issue with detailed information about your problem.
-3. Include relevant logs and error messages.
+How It Works:
+    •	Record Retrieval: Fetch the specified Salesforce record.
+    •	Web Scraping: Search for and extract additional information using a web scraper.
+    •	Update Preparation: Map the enriched data to the appropriate Salesforce fields based on configuration or provided options.
+    •	User Confirmation: Display current record data alongside proposed updates and prompt for confirmation before updating.
 
----
+Command-Line Options:
+    •	record_id: The Salesforce Record ID to enrich.
+    •	sobject_type: The Salesforce object type (e.g., Account, Contact, Lead).
+    •	–config: (Optional) Path to the configuration file. Default is config/config.yaml.
+    •	–fields: (Optional) Specific fields to update. If not provided, defaults from the configuration are used.
+
+Example Usage:
+
+source venv/bin/activate
+python scripts/manipulate_data.py 0016g000009yzfpAAA Account --fields Phone Website BillingStreet
+
+The script will display the current Salesforce data, show the proposed updates based on the web-scraped information, and ask for your confirmation before applying the update.
+
+Testing
+
+To run the complete test suite, ensure you are in your virtual environment and execute:
+
+pytest tests/
+
+For test coverage, run:
+
+pytest --cov=src tests/
+
+Troubleshooting
+    •	ModuleNotFoundError for ‘src’:
+Ensure you run the scripts from the project root or adjust your PYTHONPATH accordingly.
+    •	Authentication Failures:
+Verify your Salesforce credentials in the .env file and ensure API access is enabled.
+    •	API Errors:
+Check the API version and other settings in config/config.yaml. Also, confirm that your Salesforce user has the necessary permissions.
+
+Contributing
+
+Contributions are welcome, lord knight! If you wish to contribute:
+    •	Fork the repository.
+    •	Create a feature branch.
+    •	Submit a pull request with detailed descriptions of your changes.
+
+License
+
+This project is licensed under the MIT License.
+
+Thank you for using the Salesforce Python Template. We hope this tool streamlines your Salesforce data operations and enrichments. For any issues or further assistance, please open an issue on GitHub.

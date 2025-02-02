@@ -15,4 +15,31 @@ csv:
   encoding: 'utf-8'
   delimiter: ','
   error_directory: 'errors'
-  input_directory: 'input' 
+  input_directory: 'input'
+
+enrichment:
+  fields:
+    Account:
+      - Phone
+      - Website
+      - BillingStreet
+      - BillingCity
+      - BillingState
+      - BillingPostalCode
+      - BillingCountry
+    Contact:
+      - Phone
+      - Email
+      - MailingStreet
+      - MailingCity
+      - MailingState
+      - MailingPostalCode
+      - MailingCountry
+    Lead:
+      - Phone
+      - Email
+      - Street
+      - City
+      - State
+      - PostalCode
+      - Country 
