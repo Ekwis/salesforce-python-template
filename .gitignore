@@ -1,0 +1,4 @@
+salesforce_python_template.egg-info
+venv
+errors/app.log
+.env

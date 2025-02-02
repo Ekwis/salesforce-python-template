@@ -68,11 +68,14 @@ def test_query_success(mock_sf_client):
 
 def test_query_error(mock_sf_client):
     """Test SOQL query error handling."""
-    mock_sf_client.sf.query.side_effect = SalesforceError('Query failed')
+    error = SalesforceError('Query failed', status=400,
+                            resource_name='query', content={})
+    mock_sf_client.sf.query.side_effect = error
 
     with pytest.raises(Exception) as exc_info:
         mock_sf_client.query('SELECT Invalid FROM Account')
-    assert str(exc_info.value) == 'Query failed: Query failed'
+    expected_error = 'Query failed: Unknown error occurred for {url}. Response content: {content}'
+    assert str(exc_info.value) == expected_error
 
 
 def test_bulk_insert_success(mock_sf_client):
@@ -92,8 +95,11 @@ def test_bulk_insert_error(mock_sf_client):
     """Test bulk insert error handling."""
     mock_bulk = MagicMock()
     mock_sf_client.sf.bulk = mock_bulk
-    mock_bulk.Account.insert.side_effect = SalesforceError('Insert failed')
+    error = SalesforceError('Insert failed', status=400,
+                            resource_name='insert', content={})
+    mock_bulk.Account.insert.side_effect = error
 
     with pytest.raises(Exception) as exc_info:
         mock_sf_client.bulk_insert('Account', [{'Name': 'Test'}])
-    assert str(exc_info.value) == 'Bulk insert failed: Insert failed'
+    expected_error = 'Bulk insert failed: Unknown error occurred for {url}. Response content: {content}'
+    assert str(exc_info.value) == expected_error

@@ -2,16 +2,17 @@
 """
 Script to query data from Salesforce and save to CSV.
 """
-from src.utils import setup_logging
 from src.salesforce import SalesforceClient
-import argparse
-import csv
+from src.utils import setup_logging
 import os
 import sys
+import csv
+import argparse
 from typing import List, Dict
 
-# Add parent directory to Python path for importing local modules
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the project root directory to the Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 
 def parse_args():

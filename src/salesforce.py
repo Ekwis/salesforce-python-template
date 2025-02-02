@@ -29,7 +29,7 @@ class SalesforceClient:
             return Salesforce(
                 username=os.getenv('SALESFORCE_USERNAME'),
                 password=os.getenv('SALESFORCE_PASSWORD'),
-                security_token=os.getenv('SALESFORCE_SECURITY_TOKEN'),
+                security_token=os.getenv('SALESFORCE_SECURITY_TOKEN', ''),
                 domain=os.getenv('SALESFORCE_DOMAIN', 'login'),
                 version=self.config['api']['version']
             )
@@ -42,7 +42,7 @@ class SalesforceClient:
             results = self.sf.query(soql)
             return results['records']
         except SalesforceError as e:
-            raise Exception(f"Query failed: {str(e)}")
+            raise Exception(f"Query failed: {e.message}")
 
     def bulk_insert(self, object_name: str, data: List[Dict]) -> List[Dict]:
         """Insert multiple records using bulk API."""
@@ -50,7 +50,7 @@ class SalesforceClient:
             results = self.sf.bulk.__getattr__(object_name).insert(data)
             return results
         except SalesforceError as e:
-            raise Exception(f"Bulk insert failed: {str(e)}")
+            raise Exception(f"Bulk insert failed: {e.message}")
 
     def bulk_update(self, object_name: str, data: List[Dict]) -> List[Dict]:
         """Update multiple records using bulk API."""
@@ -58,11 +58,11 @@ class SalesforceClient:
             results = self.sf.bulk.__getattr__(object_name).update(data)
             return results
         except SalesforceError as e:
-            raise Exception(f"Bulk update failed: {str(e)}")
+            raise Exception(f"Bulk update failed: {e.message}")
 
     def get_object_fields(self, object_name: str) -> Dict:
         """Get field descriptions for a Salesforce object."""
         try:
             return self.sf.__getattr__(object_name).describe()
         except SalesforceError as e:
-            raise Exception(f"Failed to get object description: {str(e)}")
+            raise Exception(f"Failed to get object description: {e.message}")

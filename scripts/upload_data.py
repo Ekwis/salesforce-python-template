@@ -2,15 +2,16 @@
 """
 Script to upload CSV data to Salesforce.
 """
-from src.utils import setup_logging, read_csv, save_failed_records, chunk_list
 from src.salesforce import SalesforceClient
-import argparse
+from src.utils import setup_logging, read_csv, save_failed_records, chunk_list
 import os
 import sys
+import argparse
 from typing import List, Dict
 
-# Add parent directory to Python path for importing local modules
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the project root directory to the Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 
 def parse_args():

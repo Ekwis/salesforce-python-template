@@ -15,4 +15,4 @@ csv:
   encoding: 'utf-8'
   delimiter: ','
   error_directory: 'errors'
-  input_directory: 'csvs' 
+  input_directory: 'input' 
