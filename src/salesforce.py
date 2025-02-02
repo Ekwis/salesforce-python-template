@@ -2,7 +2,7 @@
 Salesforce connection and operations module.
 """
 import os
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 import yaml
 from dotenv import load_dotenv
 from simple_salesforce import Salesforce
@@ -13,14 +13,14 @@ class SalesforceClient:
     """Handles Salesforce authentication and operations."""
 
     def __init__(self, config_path: str = 'config/config.yaml'):
-        """Initialize Salesforce client with configuration."""
+        """Initialise Salesforce client with configuration."""
         load_dotenv()
 
         # Load configuration
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
 
-        # Initialize Salesforce connection
+        # Initialise Salesforce connection
         self.sf = self._authenticate()
 
     def _authenticate(self) -> Salesforce:

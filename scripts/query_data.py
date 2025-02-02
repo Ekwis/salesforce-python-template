@@ -2,8 +2,6 @@
 """
 Script to query data from Salesforce and save to CSV.
 """
-from src.salesforce import SalesforceClient
-from src.utils import setup_logging
 import os
 import sys
 import csv
@@ -13,6 +11,9 @@ from typing import List, Dict
 # Add the project root directory to the Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
+
+from src.salesforce import SalesforceClient
+from src.utils import setup_logging
 
 
 def parse_args():
@@ -31,19 +32,19 @@ def save_to_csv(records: List[Dict], output_file: str, config_path: str) -> None
     if not records:
         return
 
-    # Create output directory if it doesn't exist
+    # Create output directory if it does not exist
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     # Get field names from first record
     fieldnames = list(records[0].keys())
 
+    logger = setup_logging(config_path)
     try:
         with open(output_file, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(records)
     except Exception as e:
-        logger = setup_logging(config_path)
         logger.error(f"Error saving to CSV file {output_file}: {str(e)}")
         raise
 
@@ -54,9 +55,9 @@ def main():
     logger = setup_logging(args.config)
 
     try:
-        # Initialize Salesforce client
+        # Initialise Salesforce client
         sf = SalesforceClient(args.config)
-        logger.info(f"Connected to Salesforce as {sf.sf.session_id}")
+        logger.info(f"Initialised connection to Salesforce. Session ID is {sf.sf.session_id}")
 
         # Execute query
         logger.info(f"Executing query: {args.soql}")

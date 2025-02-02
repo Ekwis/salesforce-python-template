@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
-Script to upload CSV data to Salesforce.
+Script to upload CSV data to Salesforce, with optional field mapping.
 """
-from src.salesforce import SalesforceClient
-from src.utils import setup_logging, read_csv, save_failed_records, chunk_list
 import os
 import sys
 import argparse
@@ -13,11 +11,14 @@ from typing import List, Dict
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
+from src.salesforce import SalesforceClient
+from src.utils import setup_logging, read_csv, save_failed_records, chunk_list
+
 
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description='Upload CSV data to Salesforce')
+        description='Upload CSV data to Salesforce (with optional field mapping).')
     parser.add_argument('csv_file', help='Path to the CSV file to upload')
     parser.add_argument(
         'object_name', help='Salesforce object name (e.g., Account, Contact)')
@@ -45,25 +46,69 @@ def process_results(results: List[Dict], records: List[Dict],
     logger.info(f"Failed to upload {len(failed_records)} records")
 
 
+def prompt_field_mapping(records: List[Dict], logger) -> Dict[str, str]:
+    """
+    Prompt the user to map CSV fields to Salesforce fields.
+    Returns a dictionary mapping {original_field_name: new_field_name}.
+    """
+    if not records:
+        logger.warning("No records found in CSV, skipping field mapping.")
+        return {}
+
+    fieldnames = list(records[0].keys())
+    field_mapping = {}
+
+    logger.info("Starting interactive field mapping...")
+    for field in fieldnames:
+        response = input(f"Do you want to map the field '{field}'? (y/n): ").strip().lower()
+        if response == 'y':
+            new_name = input(
+                f"Enter the Salesforce field name to map '{field}' to. "
+                f"(Press Enter to keep '{field}'): ").strip()
+            if new_name:
+                field_mapping[field] = new_name
+            else:
+                field_mapping[field] = field
+        else:
+            # If user does not want to map, we keep the original name
+            field_mapping[field] = field
+
+    return field_mapping
+
+
+def apply_field_mapping(records: List[Dict], field_mapping: Dict[str, str]) -> None:
+    """
+    Apply the field mapping to the list of records in-place.
+    """
+    for record in records:
+        for old_field, new_field in list(field_mapping.items()):
+            if old_field in record and new_field != old_field:
+                record[new_field] = record.pop(old_field)
+
+
 def main():
     """Main function to handle CSV upload to Salesforce."""
     args = parse_args()
     logger = setup_logging(args.config)
 
     try:
-        # Initialize Salesforce client
+        # Initialise Salesforce client
         sf = SalesforceClient(args.config)
-        logger.info(f"Connected to Salesforce as {sf.sf.session_id}")
+        logger.info(f"Initialised connection to Salesforce. Session ID is {sf.sf.session_id}")
 
         # Read CSV data
         records = read_csv(args.csv_file, args.config)
         logger.info(f"Read {len(records)} records from {args.csv_file}")
 
+        # Field mapping (interactive)
+        field_mapping = prompt_field_mapping(records, logger)
+        apply_field_mapping(records, field_mapping)
+
         # Process in chunks
         chunk_size = sf.config['api']['batch_size']
-        for i, chunk in enumerate(chunk_list(records, chunk_size)):
-            logger.info(
-                f"Processing chunk {i+1} of {len(records)//chunk_size + 1}")
+        total_chunks = (len(records) + chunk_size - 1) // chunk_size  # ceiling division
+        for i, chunk in enumerate(chunk_list(records, chunk_size), start=1):
+            logger.info(f"Processing chunk {i} of {total_chunks}")
             results = sf.bulk_insert(args.object_name, chunk)
             process_results(results, chunk, args.csv_file, logger)
 

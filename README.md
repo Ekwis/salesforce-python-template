@@ -1,36 +1,43 @@
 # Salesforce Python Template
 
-A Python template for interacting with Salesforce, featuring bulk data operations, SOQL queries, and CSV processing.
+A Python template for interacting with Salesforce, featuring bulk data operations, SOQL queries, CSV processing, and interactive field mapping.
 
 ## Features
 
 - Salesforce authentication using environment variables
-- Bulk data upload from CSV files
+- Bulk data upload from CSV files (with optional field mapping)
 - SOQL query execution and CSV export
+- Data manipulation script for custom transformations
 - Error handling and logging
 - Configurable settings via YAML
 - Unit tests with pytest
 
 ## Directory Structure
 
-```
-salesforce_project/
-├── csvs/               # Store input CSV files
-├── errors/            # Store error logs and failed CSVs
-├── scripts/           # One-off scripts for uploading/querying
-├── src/              # Shared modules
-├── config/           # Configuration files
-├── tests/            # Unit tests
-├── venv/             # Virtual environment
-├── .env              # Environment variables
-├── requirements.txt  # Python dependencies
-└── README.md         # This file
-```
+Salesforce-Python-Template/
+├── config/               # Configuration files
+│   └── config.yaml
+├── errors/               # Error logs and failed CSVs
+├── input/                # Input CSV files
+├── output/               # Output CSV files (queried or manipulated)
+├── scripts/              # One-off scripts for uploading/querying/manipulating
+│   ├── manipulate_data.py
+│   ├── query_data.py
+│   └── upload_data.py
+├── src/                  # Shared modules
+│   ├── init.py
+│   ├── salesforce.py
+│   └── utils.py
+├── tests/                # Unit tests
+├── .env                  # Environment variables
+├── .env.example
+├── README.md             # This file
+└── requirements.txt      # Python dependencies
 
 ## Prerequisites
 
 - Python 3.9+
-- Salesforce account with API access
+- A Salesforce account with API access
 - Salesforce security token
 
 ## Installation
@@ -38,83 +45,95 @@ salesforce_project/
 1. Clone the repository:
    ```bash
    git clone <repository-url>
-   cd salesforce_project
-   ```
+   cd Salesforce-Python-Template
 
-2. Create and activate virtual environment:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On macOS/Linux
-   ```
+    2.	Create and activate a virtual environment:
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+python3 -m venv venv
+source venv/bin/activate  # On macOS/Linux
 
-4. Copy `.env.example` to `.env` and update with your Salesforce credentials:
-   ```bash
-   cp .env.example .env
-   ```
 
-## Configuration
+    3.	Install dependencies:
 
-1. Update `.env` file with your Salesforce credentials:
-   ```
-   SALESFORCE_USERNAME=your_username
-   SALESFORCE_PASSWORD=your_password
-   SALESFORCE_SECURITY_TOKEN=your_token
-   SALESFORCE_DOMAIN=login
-   ```
+pip install -r requirements.txt
 
-2. Modify `config/config.yaml` for custom settings:
-   ```yaml
-   api:
-     version: '57.0'
-     batch_size: 200
-     timeout: 30
-   ```
 
-## Usage
+    4.	Copy .env.example to .env and update it with your Salesforce credentials:
 
-### Upload Data to Salesforce
+cp .env.example .env
 
-```bash
+
+
+Configuration
+
+Update .env file with your Salesforce credentials:
+
+SALESFORCE_USERNAME=your_username
+SALESFORCE_PASSWORD=your_password
+SALESFORCE_SECURITY_TOKEN=your_token
+SALESFORCE_DOMAIN=login
+
+Then edit config/config.yaml if you need to modify:
+
+api:
+  version: '57.0'
+  batch_size: 200
+  timeout: 30
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file: 'errors/app.log'
+
+csv:
+  encoding: 'utf-8'
+  delimiter: ','
+  error_directory: 'errors'
+  input_directory: 'input'
+
+Usage
+
+1. Upload Data to Salesforce (with Optional Field Mapping)
+
 python scripts/upload_data.py path/to/input.csv ObjectName
-```
 
-Example:
-```bash
-python scripts/upload_data.py csvs/accounts.csv Account
-```
+During the upload process, you will be prompted for each CSV column:
 
-### Query Data from Salesforce
+Do you want to map the field 'ColumnName'? (y/n)
 
-```bash
+If you choose “y”, you can specify a new Salesforce field name; otherwise, the original name is used. After mapping, the script will upload in batches.
+
+2. Query Data from Salesforce
+
 python scripts/query_data.py "SELECT Id, Name FROM Account" output.csv
-```
 
-## Testing
+This will run the SOQL query and export results to the specified CSV file.
 
-Run the test suite:
-```bash
+3. Manipulate Data
+
+You can perform custom transformations using the manipulate_data.py script. For example:
+
+python scripts/manipulate_data.py path/to/input.csv --output path/to/modified_data.csv
+
+Edit the process_data function in scripts/manipulate_data.py to define your specific data manipulation logic.
+
+Testing
+
+Run the test suite with pytest:
+
 pytest tests/
-```
 
-## Error Handling
+Error Handling
+    •	Failed records during upload are saved to the errors/ directory.
+    •	Error logs are stored in errors/app.log.
+    •	Each error file includes a timestamp and the original filename for easier troubleshooting.
 
-- Failed records during upload are saved to the `errors/` directory
-- Error logs are stored in `errors/app.log`
-- Each error file includes timestamp and original filename
+Contributing
+    1.	Fork the repository.
+    2.	Create a feature branch.
+    3.	Commit your changes.
+    4.	Push to the branch.
+    5.	Create a Pull Request.
 
-## Contributing
+Licence
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT Licence - see the LICENSE file for details.
