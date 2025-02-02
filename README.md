@@ -14,25 +14,27 @@ A Python template for interacting with Salesforce, featuring bulk data operation
 
 ## Directory Structure
 
+```
 Salesforce-Python-Template/
 ├── config/               # Configuration files
 │   └── config.yaml
-├── errors/               # Error logs and failed CSVs
-├── input/                # Input CSV files
-├── output/               # Output CSV files (queried or manipulated)
-├── scripts/              # One-off scripts for uploading/querying/manipulating
+├── errors/              # Error logs and failed CSVs
+├── input/               # Input CSV files
+├── output/              # Output CSV files (queried or manipulated)
+├── scripts/             # One-off scripts for uploading/querying/manipulating
 │   ├── manipulate_data.py
 │   ├── query_data.py
 │   └── upload_data.py
-├── src/                  # Shared modules
+├── src/                 # Shared modules
 │   ├── __init__.py
 │   ├── salesforce.py
 │   └── utils.py
-├── tests/                # Unit tests and integration tests
-├── .env                  # Environment variables
+├── tests/               # Unit tests and integration tests
+├── .env                 # Environment variables
 ├── .env.example
-├── README.md             # This file
-└── requirements.txt      # Python dependencies
+├── README.md            # This file
+└── requirements.txt     # Python dependencies
+```
 
 ## Prerequisites
 
@@ -270,12 +272,7 @@ All operations support batch processing with the `--batch_size` parameter (max 2
 
 ### Setting Up Development Environment
 
-1. Install development dependencies:
-   ```bash
-   pip install -r requirements-dev.txt
-   ```
-
-2. Set up pre-commit hooks:
+1. Set up pre-commit hooks:
    ```bash
    pre-commit install
    ```
