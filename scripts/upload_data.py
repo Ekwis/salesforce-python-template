@@ -1,100 +1,330 @@
 #!/usr/bin/env python3
 """
-Script to upload CSV data to Salesforce, with optional field mapping.
+Script to upload CSV data to Salesforce, allowing:
+- insert, update, delete, upsert
+- batch size of up to 200 records per call to the normal API (SObject Collections)
+- interactive field mapping with the option to skip fields
 """
+
+from src.utils import (
+    setup_logging,
+    read_csv,
+    save_failed_records,
+    chunk_list
+)
+from src.salesforce import SalesforceClient
 import os
 import sys
 import argparse
 from typing import List, Dict
+import json
 
 # Add the project root directory to the Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from src.salesforce import SalesforceClient
-from src.utils import setup_logging, read_csv, save_failed_records, chunk_list
-
 
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description='Upload CSV data to Salesforce (with optional field mapping).')
-    parser.add_argument('csv_file', help='Path to the CSV file to upload')
+        description=(
+            "Upload CSV data to Salesforce with field mapping, supporting "
+            "insert, update, delete, or upsert (via SObject Collections)."
+        )
+    )
+    parser.add_argument("csv_file", help="Path to the CSV file to upload")
     parser.add_argument(
-        'object_name', help='Salesforce object name (e.g., Account, Contact)')
-    parser.add_argument('--config', default='config/config.yaml',
-                        help='Path to configuration file')
+        "object_name", help="Salesforce object name (e.g., Account, Contact)")
+    parser.add_argument(
+        "--operation",
+        choices=["insert", "update", "delete", "upsert"],
+        default="insert",
+        help="Salesforce operation: insert, update, delete, or upsert",
+    )
+    parser.add_argument(
+        "--config",
+        default="config/config.yaml",
+        help="Path to configuration file",
+    )
+    parser.add_argument(
+        "--external_id_field",
+        default=None,
+        help=(
+            "If using upsert, specify the external ID field name, e.g. 'External_Id__c'. "
+            "Ignored for other operations."
+        ),
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=200,
+        help="Number of records per API call (max 200). Defaults to 200."
+    )
     return parser.parse_args()
-
-
-def process_results(results: List[Dict], records: List[Dict],
-                    csv_file: str, logger) -> None:
-    """Process bulk upload results and handle failures."""
-    failed_records = []
-
-    for result, record in zip(results, records):
-        if not result['success']:
-            logger.error(f"Failed to upload record: {result['errors']}")
-            failed_records.append(record)
-
-    if failed_records:
-        error_file = save_failed_records(failed_records, csv_file)
-        logger.info(f"Failed records saved to: {error_file}")
-
-    success_count = len(records) - len(failed_records)
-    logger.info(f"Successfully uploaded {success_count} records")
-    logger.info(f"Failed to upload {len(failed_records)} records")
 
 
 def prompt_field_mapping(records: List[Dict], logger) -> Dict[str, str]:
     """
     Prompt the user to map CSV fields to Salesforce fields.
-    Returns a dictionary mapping {original_field_name: new_field_name}.
+    Returns a dictionary of { original_field_name: new_field_name }.
+    If a field is skipped, it won't appear in this dictionary at all.
     """
     if not records:
-        logger.warning("No records found in CSV, skipping field mapping.")
+        logger.warning("No records found in CSV; skipping field mapping.")
         return {}
 
     fieldnames = list(records[0].keys())
     field_mapping = {}
 
     logger.info("Starting interactive field mapping...")
+
     for field in fieldnames:
-        response = input(f"Do you want to map the field '{field}'? (y/n): ").strip().lower()
-        if response == 'y':
-            new_name = input(
-                f"Enter the Salesforce field name to map '{field}' to. "
-                f"(Press Enter to keep '{field}'): ").strip()
-            if new_name:
-                field_mapping[field] = new_name
-            else:
-                field_mapping[field] = field
-        else:
-            # If user does not want to map, we keep the original name
-            field_mapping[field] = field
+        print(f"\nField detected: '{field}'")
+        response = input(
+            "Map this field to Salesforce? (y to map, n to skip): ").strip().lower()
+
+        # If user chooses to skip the field entirely, do not include it in field_mapping
+        if response == "n":
+            logger.info(f"Skipping field '{field}'. It will not be uploaded.")
+            continue
+
+        # Otherwise, user wants to map
+        new_name = input(
+            f"Enter the Salesforce field name to map '{field}' to.\n"
+            f"(Press Enter to keep '{field}'): "
+        ).strip()
+
+        # If new_name is empty, keep original
+        if not new_name:
+            new_name = field
+
+        field_mapping[field] = new_name
+        logger.info(
+            f"Mapping CSV field '{field}' -> Salesforce field '{new_name}'.")
 
     return field_mapping
 
 
-def apply_field_mapping(records: List[Dict], field_mapping: Dict[str, str]) -> None:
+def apply_field_mapping(records: List[Dict], field_mapping: Dict[str, str]) -> List[Dict]:
     """
-    Apply the field mapping to the list of records in-place.
+    Return a new list of records that apply the given field mapping.
+    Skips fields not in field_mapping at all.
     """
+    mapped_records = []
     for record in records:
-        for old_field, new_field in list(field_mapping.items()):
-            if old_field in record and new_field != old_field:
-                record[new_field] = record.pop(old_field)
+        new_record = {}
+        for original_field, mapped_field in field_mapping.items():
+            if original_field in record:
+                new_record[mapped_field] = record[original_field]
+        mapped_records.append(new_record)
+    return mapped_records
+
+
+def send_sobject_collection_request(sf, payload, logger):
+    """
+    Make a single call to the SObject Collections endpoint:
+    POST /services/data/vXX.X/composite/sobjects
+    Return the raw result or raise an exception if the call fails at the HTTP level.
+
+    The result is typically a list of results, e.g.:
+    [
+      {
+        "id": "001...",
+        "success": true,
+        "errors": []
+      },
+      ...
+    ]
+    We'll parse it in the calling function.
+    """
+    try:
+        # Use the appropriate endpoint and method based on the operation
+        if "records" in payload and len(payload["records"]) > 0:
+            first_record = payload["records"][0]
+            operation = first_record["attributes"].get("operation", "insert")
+
+            if operation == "insert":
+                endpoint = "composite/sobjects"
+                method = "POST"
+            elif operation == "update":
+                endpoint = "composite/sobjects"
+                method = "PATCH"
+            elif operation == "delete":
+                # For delete, we need to extract the IDs and use a different endpoint
+                ids = [record["Id"] for record in payload["records"]]
+                endpoint = f"composite/sobjects?ids={','.join(ids)}"
+                method = "DELETE"
+                payload = None  # DELETE doesn't need a payload
+            elif operation == "upsert":
+                # For upsert, we need the external ID field
+                external_id_field = first_record["attributes"].get(
+                    "externalIdField")
+                if not external_id_field:
+                    raise ValueError(
+                        "External ID field is required for upsert")
+                endpoint = f"composite/sobjects/{first_record['attributes']['type']}/{external_id_field}"
+                method = "PATCH"
+            else:
+                raise ValueError(f"Unknown operation: {operation}")
+
+            result = sf.sf.restful(
+                endpoint,
+                method=method,
+                data=json.dumps(payload) if payload is not None else None
+            )
+            return result
+        else:
+            raise ValueError("No records in payload")
+    except Exception as e:
+        logger.error(f"SObject Collection API request failed: {str(e)}")
+        raise
+
+
+def build_sobject_collection_payload(
+    records: List[Dict],
+    object_name: str,
+    operation: str,
+    external_id_field: str = None
+):
+    """
+    Build a payload for Salesforce's SObject Collection API for up to 200 records at once.
+    This covers insert, update, delete, upsert. Upsert requires an external ID field.
+    """
+    payload = {"allOrNone": False, "records": []}
+    for r in records:
+        # Base record
+        sobject = {
+            "attributes": {
+                "type": object_name,
+                "operation": operation
+            }
+        }
+
+        if operation == "insert":
+            # Just pass fields
+            sobject.update(r)
+
+        elif operation == "update":
+            # Must have an Id
+            if "Id" not in r:
+                # We let the calling code handle error capturing, but let's raise here
+                raise ValueError("Record is missing an 'Id' field for update.")
+            sobject.update(r)
+
+        elif operation == "delete":
+            # Must have an Id
+            if "Id" not in r:
+                raise ValueError("Record is missing an 'Id' field for delete.")
+            # We only need the Id
+            sobject["Id"] = r["Id"]
+
+        elif operation == "upsert":
+            # Upsert requires the external ID field
+            if not external_id_field:
+                raise ValueError(
+                    "Must specify --external_id_field for upsert.")
+            if external_id_field not in r:
+                raise ValueError(
+                    f"Record is missing '{external_id_field}' field for upsert."
+                )
+            sobject["attributes"]["externalIdField"] = external_id_field
+            sobject.update(r)
+        else:
+            raise ValueError(f"Unknown operation: {operation}")
+
+        payload["records"].append(sobject)
+
+    return payload
+
+
+def perform_operation_in_batches(
+    object_name: str,
+    operation: str,
+    records: List[Dict],
+    sf: SalesforceClient,
+    external_id_field: str,
+    batch_size: int,
+    logger
+):
+    """
+    Chunk the records by batch_size and perform the given operation using
+    the SObject Collections endpoint (up to 200 records per batch).
+    Returns (successes, failures).
+    Each item in successes/failures is a dict of form:
+      {
+        "record": original_record_data,
+        "id": "CreatedOrUpdatedId",
+        "error": "Error Message if any"
+      }
+    """
+    all_successes = []
+    all_failures = []
+
+    # We'll track the index of each record in the overall list
+    # so that we can store the record back in the success/failure output
+    for chunk_idx, chunk in enumerate(chunk_list(records, batch_size), start=1):
+        logger.info(
+            f"Processing chunk {chunk_idx} with {len(chunk)} records (operation = {operation})")
+        payload = build_sobject_collection_payload(
+            chunk, object_name, operation, external_id_field)
+
+        # Attempt the single call
+        result = send_sobject_collection_request(sf, payload, logger)
+
+        # Parse results
+        # The result can be either:
+        # 1. A list of results directly: [{"id": "...", "success": true, "errors": []}, ...]
+        # 2. A dict with results: {"hasErrors": bool, "results": [{...}, ...]}
+        result_records = result.get("results", []) if isinstance(
+            result, dict) else result
+        if len(result_records) != len(chunk):
+            logger.warning(
+                "Response count does not match request count - check API behavior")
+
+        # Pair each response with its original record
+        for original, response in zip(chunk, result_records):
+            if response.get("success", False):
+                all_successes.append({
+                    "record": original,
+                    "id": response.get("id")
+                })
+            else:
+                errors = response.get("errors", [])
+                # We'll combine all error messages into a single string
+                combined_errors = "; ".join(
+                    e.get("message", "") for e in errors)
+                all_failures.append({
+                    "record": original,
+                    "error": combined_errors
+                })
+
+    return all_successes, all_failures
+
+
+def process_failures(failures: List[Dict], csv_file: str, logger) -> None:
+    """Save failed records to a CSV (if any)."""
+    if not failures:
+        return
+    failed_records = []
+    for f in failures:
+        r = dict(f.get("record", {}))  # copy original
+        r["Error"] = f.get("error", "")
+        failed_records.append(r)
+
+    error_file = save_failed_records(failed_records, csv_file)
+    logger.info(f"Failed records saved to: {error_file}")
 
 
 def main():
-    """Main function to handle CSV upload to Salesforce."""
+    """Main function to handle CSV upload to Salesforce with field mapping."""
     args = parse_args()
     logger = setup_logging(args.config)
 
     try:
         # Initialise Salesforce client
         sf = SalesforceClient(args.config)
-        logger.info(f"Initialised connection to Salesforce. Session ID is {sf.sf.session_id}")
+        logger.info(
+            f"Initialised connection to Salesforce. Session ID: {sf.sf.session_id}")
 
         # Read CSV data
         records = read_csv(args.csv_file, args.config)
@@ -102,20 +332,31 @@ def main():
 
         # Field mapping (interactive)
         field_mapping = prompt_field_mapping(records, logger)
-        apply_field_mapping(records, field_mapping)
+        mapped_records = apply_field_mapping(records, field_mapping)
 
-        # Process in chunks
-        chunk_size = sf.config['api']['batch_size']
-        total_chunks = (len(records) + chunk_size - 1) // chunk_size  # ceiling division
-        for i, chunk in enumerate(chunk_list(records, chunk_size), start=1):
-            logger.info(f"Processing chunk {i} of {total_chunks}")
-            results = sf.bulk_insert(args.object_name, chunk)
-            process_results(results, chunk, args.csv_file, logger)
+        # Perform the operation, chunked by batch_size, using SObject Collections
+        successes, failures = perform_operation_in_batches(
+            args.object_name,
+            args.operation,
+            mapped_records,
+            sf,
+            args.external_id_field,
+            args.batch_size,
+            logger
+        )
+
+        # Log results
+        logger.info(f"Operation '{args.operation}' completed.")
+        logger.info(f"  Successful records: {len(successes)}")
+        logger.info(f"  Failed records:     {len(failures)}")
+
+        # Save failures to CSV if needed
+        process_failures(failures, args.csv_file, logger)
 
     except Exception as e:
         logger.error(f"Error during upload: {str(e)}")
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

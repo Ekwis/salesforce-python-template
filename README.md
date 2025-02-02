@@ -25,10 +25,10 @@ Salesforce-Python-Template/
 │   ├── query_data.py
 │   └── upload_data.py
 ├── src/                  # Shared modules
-│   ├── init.py
+│   ├── __init__.py
 │   ├── salesforce.py
 │   └── utils.py
-├── tests/                # Unit tests
+├── tests/                # Unit tests and integration tests
 ├── .env                  # Environment variables
 ├── .env.example
 ├── README.md             # This file
@@ -150,6 +150,8 @@ Salesforce-Python-Template/
 
 ### 1. Upload Data to Salesforce
 
+This script allows you to upload CSV data to Salesforce with interactive field mapping.
+
 ```bash
 # Activate virtual environment if not already activated
 source venv/bin/activate
@@ -159,23 +161,62 @@ python scripts/upload_data.py path/to/input.csv ObjectName
 ```
 
 During the upload process, you'll be prompted for field mapping:
-- For each CSV column, you'll see: `Do you want to map the field 'ColumnName'? (y/n)`
-- If yes, enter the corresponding Salesforce field name
-- If no, the original column name will be used
+- For each CSV column, you'll see: `Map this field to Salesforce? (y to map, n to skip)`
+- If yes, enter the corresponding Salesforce field name (or press Enter to keep the original)
+- If no, the field will be skipped
 
-### 2. Query Data from Salesforce
+### 2. Data Upload Operations
 
+The Salesforce Python Template now supports the following data upload operations:
+
+- **Insert**: Insert new records. You can upload a single record or multiple records in a batch (up to 200 records per API call).
+- **Update**: Update existing records by providing the record ID. You can update one or many records in a single batch.
+- **Upsert**: Insert or update records based on an external ID field. When using upsert, specify the external ID field (e.g., `External_Id__c`).
+- **Delete**: Delete records by providing their record ID. Supports single or batch deletion.
+
+#### Examples:
+
+**Insert Single Record**
 ```bash
-python scripts/query_data.py "SELECT Id, Name FROM Account" output.csv
+python scripts/upload_data.py input/single_record.csv Account --operation insert
 ```
 
-### 3. Manipulate Data
-
+**Insert Multiple Records (Batch)**
 ```bash
-python scripts/manipulate_data.py path/to/input.csv --output path/to/modified_data.csv
+python scripts/upload_data.py input/multiple_records.csv Account --operation insert --batch_size 10
 ```
 
-To customize transformations, edit the `process_data` function in `scripts/manipulate_data.py`.
+**Update Single Record**
+```bash
+python scripts/upload_data.py input/update_single_record.csv Account --operation update
+```
+
+**Update Multiple Records (Batch)**
+```bash
+python scripts/upload_data.py input/update_multiple_records.csv Account --operation update --batch_size 10
+```
+
+**Upsert Single Record**
+```bash
+python scripts/upload_data.py input/upsert_single_record.csv Account --operation upsert --external_id_field External_Id__c
+```
+
+**Upsert Multiple Records (Batch)**
+```bash
+python scripts/upload_data.py input/upsert_multiple_records.csv Account --operation upsert --external_id_field External_Id__c --batch_size 10
+```
+
+**Delete Single Record**
+```bash
+python scripts/upload_data.py input/delete_single_record.csv Account --operation delete
+```
+
+**Delete Multiple Records (Batch)**
+```bash
+python scripts/upload_data.py input/delete_multiple_records.csv Account --operation delete --batch_size 10
+```
+
+All operations support batch processing with the `--batch_size` parameter (max 200 records per API call).
 
 ## Testing
 
@@ -187,6 +228,7 @@ To customize transformations, edit the `process_data` function in `scripts/manip
 2. Run specific test files:
    ```bash
    pytest tests/test_salesforce.py
+   pytest tests/test_upload_operations.py
    ```
 
 3. Run tests with coverage:
@@ -198,17 +240,17 @@ To customize transformations, edit the `process_data` function in `scripts/manip
 
 ### Common Issues
 
-1. Authentication Failures
-   - Verify credentials in .env file
-   - Ensure security token is current
-   - Check if IP is whitelisted in Salesforce
+1. **Authentication Failures**
+   - Verify credentials in the .env file.
+   - Ensure the security token is current.
+   - Check if your IP is whitelisted in Salesforce.
 
-2. API Errors
-   - Verify API access is enabled
-   - Check API version in config.yaml
-   - Ensure object permissions are correct
+2. **API Errors**
+   - Verify API access is enabled.
+   - Check the API version in config.yaml.
+   - Ensure object permissions are correct.
 
-3. Virtual Environment Issues
+3. **Virtual Environment Issues**
    ```bash
    # Recreate virtual environment
    deactivate  # If already in a venv
@@ -220,9 +262,9 @@ To customize transformations, edit the `process_data` function in `scripts/manip
 
 ### Logging
 
-- Check errors/app.log for detailed error messages
-- Failed records during upload are saved in errors/
-- Each error file includes timestamp for tracking
+- Check errors/app.log for detailed error messages.
+- Failed records during upload are saved in errors/.
+- Each error file includes a timestamp for tracking.
 
 ## Development
 
@@ -240,7 +282,7 @@ To customize transformations, edit the `process_data` function in `scripts/manip
 
 ### Contributing
 
-1. Fork the repository
+1. Fork the repository.
 2. Create a feature branch:
    ```bash
    git checkout -b feature/your-feature-name
@@ -253,15 +295,17 @@ To customize transformations, edit the `process_data` function in `scripts/manip
    ```bash
    git push origin feature/your-feature-name
    ```
-5. Create a Pull Request
+5. Create a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License – see the LICENSE file for details.
 
 ## Support
 
 For support and questions:
-1. Check existing issues in the repository
-2. Create a new issue with detailed information about your problem
-3. Include relevant logs and error messages
+1. Check existing issues in the repository.
+2. Create a new issue with detailed information about your problem.
+3. Include relevant logs and error messages.
+
+---
