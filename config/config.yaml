@@ -1,0 +1,18 @@
+# Salesforce API Configuration
+api:
+  version: '57.0'  # Salesforce API version
+  batch_size: 200  # Number of records to process in each batch
+  timeout: 30      # API request timeout in seconds
+
+# Logging Configuration
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file: 'errors/app.log'
+
+# CSV Processing
+csv:
+  encoding: 'utf-8'
+  delimiter: ','
+  error_directory: 'errors'
+  input_directory: 'csvs' 
