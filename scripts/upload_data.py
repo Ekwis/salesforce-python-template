@@ -23,7 +23,6 @@ import json
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -101,7 +100,6 @@ def prompt_field_mapping(records: List[Dict], logger) -> Dict[str, str]:
         field_mapping[field] = new_name
         logger.info(
             f"Mapping CSV field '{field}' -> Salesforce field '{new_name}'.")
-
     return field_mapping
 
 
@@ -157,11 +155,9 @@ def send_sobject_collection_request(sf, payload, logger):
                 payload = None  # DELETE doesn't need a payload
             elif operation == "upsert":
                 # For upsert, we need the external ID field
-                external_id_field = first_record["attributes"].get(
-                    "externalIdField")
+                external_id_field = first_record["attributes"].get("externalIdField")
                 if not external_id_field:
-                    raise ValueError(
-                        "External ID field is required for upsert")
+                    raise ValueError("External ID field is required for upsert")
                 endpoint = f"composite/sobjects/{first_record['attributes']['type']}/{external_id_field}"
                 method = "PATCH"
             else:
@@ -203,37 +199,29 @@ def build_sobject_collection_payload(
         if operation == "insert":
             # Just pass fields
             sobject.update(r)
-
         elif operation == "update":
             # Must have an Id
             if "Id" not in r:
-                # We let the calling code handle error capturing, but let's raise here
                 raise ValueError("Record is missing an 'Id' field for update.")
             sobject.update(r)
-
         elif operation == "delete":
             # Must have an Id
             if "Id" not in r:
                 raise ValueError("Record is missing an 'Id' field for delete.")
             # We only need the Id
             sobject["Id"] = r["Id"]
-
         elif operation == "upsert":
             # Upsert requires the external ID field
             if not external_id_field:
-                raise ValueError(
-                    "Must specify --external_id_field for upsert.")
+                raise ValueError("Must specify --external_id_field for upsert.")
             if external_id_field not in r:
-                raise ValueError(
-                    f"Record is missing '{external_id_field}' field for upsert."
-                )
+                raise ValueError(f"Record is missing '{external_id_field}' field for upsert.")
             sobject["attributes"]["externalIdField"] = external_id_field
             sobject.update(r)
         else:
             raise ValueError(f"Unknown operation: {operation}")
 
         payload["records"].append(sobject)
-
     return payload
 
 
@@ -260,28 +248,13 @@ def perform_operation_in_batches(
     all_successes = []
     all_failures = []
 
-    # We'll track the index of each record in the overall list
-    # so that we can store the record back in the success/failure output
     for chunk_idx, chunk in enumerate(chunk_list(records, batch_size), start=1):
-        logger.info(
-            f"Processing chunk {chunk_idx} with {len(chunk)} records (operation = {operation})")
-        payload = build_sobject_collection_payload(
-            chunk, object_name, operation, external_id_field)
-
-        # Attempt the single call
+        logger.info(f"Processing chunk {chunk_idx} with {len(chunk)} records (operation = {operation})")
+        payload = build_sobject_collection_payload(chunk, object_name, operation, external_id_field)
         result = send_sobject_collection_request(sf, payload, logger)
-
-        # Parse results
-        # The result can be either:
-        # 1. A list of results directly: [{"id": "...", "success": true, "errors": []}, ...]
-        # 2. A dict with results: {"hasErrors": bool, "results": [{...}, ...]}
-        result_records = result.get("results", []) if isinstance(
-            result, dict) else result
+        result_records = result.get("results", []) if isinstance(result, dict) else result
         if len(result_records) != len(chunk):
-            logger.warning(
-                "Response count does not match request count - check API behavior")
-
-        # Pair each response with its original record
+            logger.warning("Response count does not match request count - check API behavior")
         for original, response in zip(chunk, result_records):
             if response.get("success", False):
                 all_successes.append({
@@ -290,51 +263,91 @@ def perform_operation_in_batches(
                 })
             else:
                 errors = response.get("errors", [])
-                # We'll combine all error messages into a single string
-                combined_errors = "; ".join(
-                    e.get("message", "") for e in errors)
+                combined_errors = "; ".join(e.get("message", "") for e in errors)
                 all_failures.append({
                     "record": original,
                     "error": combined_errors
                 })
-
     return all_successes, all_failures
 
 
+def save_upload_results(successes: List[Dict], failures: List[Dict], csv_file: str, logger) -> None:
+    """
+    Save record-by-record playback of upload results to CSV files.
+    Creates two files: one for successes and one for failures, in a 'results' directory.
+    Each record includes original input fields and additional columns indicating the result.
+    """
+    import csv
+    import os
+    from datetime import datetime
+
+    results_dir = os.path.join(os.getcwd(), "results")
+    os.makedirs(results_dir, exist_ok=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    success_filename = os.path.join(results_dir, f"upload_success_{timestamp}.csv")
+    error_filename = os.path.join(results_dir, f"upload_errors_{timestamp}.csv")
+
+    if successes:
+        # Assume all records have the same keys
+        fieldnames = list(successes[0]["record"].keys())
+        fieldnames.extend(["Result", "SalesforceId"])
+        with open(success_filename, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=',')
+            writer.writeheader()
+            for item in successes:
+                rec = item["record"].copy()
+                rec["Result"] = "Success"
+                rec["SalesforceId"] = item.get("id", "")
+                writer.writerow(rec)
+    else:
+        with open(success_filename, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=["Result", "SalesforceId"], delimiter=',')
+            writer.writeheader()
+
+    if failures:
+        fieldnames = list(failures[0]["record"].keys())
+        fieldnames.extend(["Result", "Error"])
+        with open(error_filename, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=',')
+            writer.writeheader()
+            for item in failures:
+                rec = item["record"].copy()
+                rec["Result"] = "Error"
+                rec["Error"] = item.get("error", "")
+                writer.writerow(rec)
+    else:
+        with open(error_filename, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=["Result", "Error"], delimiter=',')
+            writer.writeheader()
+
+    logger.info(f"Success records saved to: {success_filename}")
+    logger.info(f"Error records saved to: {error_filename}")
+
+
 def process_failures(failures: List[Dict], csv_file: str, logger) -> None:
-    """Save failed records to a CSV (if any)."""
+    """Legacy function to save failed records using save_failed_records from utils."""
     if not failures:
         return
     failed_records = []
     for f in failures:
-        r = dict(f.get("record", {}))  # copy original
+        r = dict(f.get("record", {}))
         r["Error"] = f.get("error", "")
         failed_records.append(r)
-
     error_file = save_failed_records(failed_records, csv_file)
-    logger.info(f"Failed records saved to: {error_file}")
+    logger.info(f"Legacy failed records saved to: {error_file}")
 
 
 def main():
-    """Main function to handle CSV upload to Salesforce with field mapping."""
     args = parse_args()
     logger = setup_logging(args.config)
 
     try:
-        # Initialise Salesforce client
         sf = SalesforceClient(args.config)
-        logger.info(
-            f"Initialised connection to Salesforce. Session ID: {sf.sf.session_id}")
-
-        # Read CSV data
+        logger.info(f"Initialised connection to Salesforce. Session ID: {sf.sf.session_id}")
         records = read_csv(args.csv_file, args.config)
         logger.info(f"Read {len(records)} records from {args.csv_file}")
-
-        # Field mapping (interactive)
         field_mapping = prompt_field_mapping(records, logger)
         mapped_records = apply_field_mapping(records, field_mapping)
-
-        # Perform the operation, chunked by batch_size, using SObject Collections
         successes, failures = perform_operation_in_batches(
             args.object_name,
             args.operation,
@@ -344,15 +357,10 @@ def main():
             args.batch_size,
             logger
         )
-
-        # Log results
         logger.info(f"Operation '{args.operation}' completed.")
         logger.info(f"  Successful records: {len(successes)}")
         logger.info(f"  Failed records:     {len(failures)}")
-
-        # Save failures to CSV if needed
-        process_failures(failures, args.csv_file, logger)
-
+        save_upload_results(successes, failures, args.csv_file, logger)
     except Exception as e:
         logger.error(f"Error during upload: {str(e)}")
         sys.exit(1)
